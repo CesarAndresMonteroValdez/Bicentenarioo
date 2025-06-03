@@ -1,132 +1,139 @@
-import { View, Text, TextInput, Image, Pressable, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  Image,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
+import { useRouter } from 'expo-router';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
+
 import { useAuthStore } from '../store/authStore';
 import { globalStyles } from '../styles/globalStyles';
-import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
-import SplashRespuesta from '../components/SplashRespuesta';
-import SplashLogin from '../components/SplashLogin';
+import SplashOverlay from '../components/SplashRespuesta';
+import SplashIntro from '../components/SplashLogin';
 
-const LoginSchema = Yup.object().shape({
-  email: Yup.string().email('Correo electrónico inválido').required('El correo electrónico es obligatorio'),
-  password: Yup.string().min(6, 'La contraseña debe tener al menos 6 caracteres').required('La contraseña es obligatoria'),
+const validationRules = Yup.object({
+  email: Yup.string().email('Correo no válido').required('Requerido'),
+  password: Yup.string().min(6, 'Mínimo 6 caracteres').required('Requerido'),
 });
 
-export default function LoginScreen() {
-  const { login, accessAsGuest, isLoading } = useAuthStore();
+export default function PantallaInicioSesion() {
   const router = useRouter();
-  const [enviando, setEnviando] = useState(false);
-  const [cargando, setCargando] = useState(true);
+  const { login, accessAsGuest, isLoading } = useAuthStore();
+
+  const [animando, setAnimando] = useState(true);
+  const [enProceso, setEnProceso] = useState(false);
 
   useEffect(() => {
-    const temporizador = setTimeout(() => {
-      setCargando(false);
-    }, 1500);
-    return () => clearTimeout(temporizador);
+    const t = setTimeout(() => setAnimando(false), 1300);
+    return () => clearTimeout(t);
   }, []);
 
-  const handleLogin = async (values, { setSubmitting }) => {
+  const iniciarSesion = async (credenciales, helpers) => {
     try {
-      setEnviando(true);
-      await login(values.email, values.password);
+      setEnProceso(true);
+      await login(credenciales.email, credenciales.password);
       router.replace('/home');
-    } catch (err: any) {
-      const errorMessage = err.message || 'Usuario o contraseña incorrectos';
-      Alert.alert('Error de autenticación', errorMessage);
+    } catch (error: any) {
+      Alert.alert('Fallo de inicio de sesión', error.message || 'Credenciales incorrectas');
     } finally {
-      setSubmitting(false);
-      setEnviando(false);
+      helpers.setSubmitting(false);
+      setEnProceso(false);
     }
   };
 
-  if (cargando) return <SplashLogin />;
+  const continuarComoInvitado = async () => {
+    try {
+      setEnProceso(true);
+      await accessAsGuest();
+      router.replace('/home');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'No fue posible continuar como invitado');
+    } finally {
+      setEnProceso(false);
+    }
+  };
+
+  if (animando) return <SplashIntro />;
 
   return (
-    <View style={globalStyles.container}>
-      <Image source={require('../assets/logo_1.jpg')} style={globalStyles.imageHeader} />
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={globalStyles.container}>
+      <ScrollView contentContainerStyle={globalStyles.scrollContent}>
+        <Image source={require('../assets/logo_1.jpg')} style={globalStyles.imageHeader} />
 
-      <View style={globalStyles.contentBox}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 11 }}>
-          <Pressable
-            style={{
-              backgroundColor: '#ffffff',
-              paddingVertical: 11,
-              paddingHorizontal: 30,
-              borderRadius: 22,
-              marginRight: -1,
-            }}
-            onPress={() => router.push('/register')}
-          >
-            <Text style={{ fontWeight: 'bold', color: '#000' }}>Registrarse</Text>
-          </Pressable>
-
-          <Pressable
-            style={{
-              backgroundColor: '#6c757d',
-              paddingVertical: 12,
-              paddingHorizontal: 22,
-              borderRadius: 20,
-            }}
-            onPress={async () => {
-              try {
-                setEnviando(true);
-                await accessAsGuest();
-                router.replace('/home');
-              } catch (err: any) {
-                Alert.alert('Error', err.message || 'No se pudo acceder como invitado');
-              } finally {
-                setEnviando(false);
-              }
-            }}
-          >
-            <Text style={{ fontWeight: 'bold', color: 'white' }}>Invitado</Text>
-          </Pressable>
-        </View>
-
-        <Text style={globalStyles.title}>BIENVENIDO A SANTA CRUZ DE LA SIERRA</Text>
+        <Text style={[globalStyles.title, { marginBottom: 20 }]}>
+          Inicia sesión para celebrar el Bicentenario
+        </Text>
 
         <Formik
           initialValues={{ email: '', password: '' }}
-          validationSchema={LoginSchema}
-          onSubmit={handleLogin}
+          validationSchema={validationRules}
+          onSubmit={iniciarSesion}
         >
           {({ handleChange, handleBlur, handleSubmit, values, errors, touched, isSubmitting }) => (
             <>
-              <TextInput
-                style={[globalStyles.input, touched.email && errors.email && globalStyles.inputError]}
-                placeholder="E-Mail"
-                onChangeText={handleChange('email')}
-                onBlur={handleBlur('email')}
-                value={values.email}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-              {touched.email && errors.email && <Text style={globalStyles.errorText}>{errors.email}</Text>}
+              <View style={globalStyles.inputGroup}>
+                <TextInput
+                  placeholder="Correo electrónico"
+                  style={globalStyles.input}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="emailAddress"
+                  onChangeText={handleChange('email')}
+                  onBlur={handleBlur('email')}
+                  value={values.email}
+                />
+                {touched.email && errors.email && (
+                  <Text style={globalStyles.errorText}>{errors.email}</Text>
+                )}
+              </View>
 
-              <TextInput
-                style={[globalStyles.input, touched.password && errors.password && globalStyles.inputError]}
-                placeholder="Contraseña"
-                onChangeText={handleChange('password')}
-                onBlur={handleBlur('password')}
-                value={values.password}
-                secureTextEntry
-              />
-              {touched.password && errors.password && <Text style={globalStyles.errorText}>{errors.password}</Text>}
+              <View style={globalStyles.inputGroup}>
+                <TextInput
+                  placeholder="Contraseña"
+                  style={globalStyles.input}
+                  secureTextEntry
+                  autoCorrect={false}
+                  textContentType="password"
+                  onChangeText={handleChange('password')}
+                  onBlur={handleBlur('password')}
+                  value={values.password}
+                />
+                {touched.password && errors.password && (
+                  <Text style={globalStyles.errorText}>{errors.password}</Text>
+                )}
+              </View>
 
               {isLoading || isSubmitting ? (
-                <ActivityIndicator size="large" color="#0000ff" />
+                <ActivityIndicator size="large" color="#007bff" />
               ) : (
-                <Pressable style={globalStyles.buttonGreen} onPress={handleSubmit}>
-                  <Text style={globalStyles.buttonText}>Iniciar Sesión</Text>
+                <Pressable style={globalStyles.buttonBlue} onPress={handleSubmit}>
+                  <Text style={globalStyles.buttonText}>Acceder</Text>
                 </Pressable>
               )}
             </>
           )}
         </Formik>
-      </View>
 
-      <SplashRespuesta visible={enviando} mensaje="Procesando datos..." />
-    </View>
+        <Pressable style={globalStyles.buttonGray} onPress={continuarComoInvitado}>
+          <Text style={globalStyles.buttonText}>Entrar como invitado</Text>
+        </Pressable>
+
+        <Pressable style={globalStyles.linkButton} onPress={() => router.push('/register')}>
+          <Text style={globalStyles.linkText}>¿No tienes cuenta? Regístrate</Text>
+        </Pressable>
+      </ScrollView>
+
+      <SplashOverlay visible={enProceso} mensaje="Verificando acceso..." />
+    </KeyboardAvoidingView>
   );
 }
